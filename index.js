@@ -6,6 +6,7 @@ const rateLimit = require('express-rate-limit');
 const axios = require('axios');
 
 const app = express();
+app.set('trust proxy', 1); // Güvenlik duvarı veya proxy arkasında çalışıyorsa gerekli (Heroku, Vercel, Nginx vb.)
 const PORT = process.env.PORT || 3000;
 
 // reCAPTCHA secret key
@@ -40,9 +41,9 @@ async function verifyRecaptchaV3(captchaToken) {
         }
       }
     );
-    
+
     const data = response.data;
-    
+
     // v3 puanı kontrol et (0.0 - 1.0 arası)
     if (data.success && data.score !== undefined) {
       // 0.5'in üzerindeki skorlar genellikle insan olarak kabul edilir
@@ -54,7 +55,7 @@ async function verifyRecaptchaV3(captchaToken) {
         action: data.action
       };
     }
-    
+
     return {
       success: false,
       score: 0,
@@ -84,13 +85,13 @@ async function sendEmail(formData) {
   });
 
   // Şikayet metni kontrolü
-  const sikayetHtml = formData.sikayet ? 
+  const sikayetHtml = formData.sikayet ?
     `<tr>
       <td style="padding: 12px; border-bottom: 1px solid #eee; font-weight: bold; color: #444;">Şikayet</td>
       <td style="padding: 12px; border-bottom: 1px solid #eee;">${formData.sikayet}</td>
     </tr>` : '';
-  
- 
+
+
   // HTML E-posta içeriği
   const mailOptions = {
     from: `"Randevu" <${process.env.EMAIL_USER}>`,
@@ -261,8 +262,8 @@ async function sendEmail(formData) {
     </html>
     `,
     // Düz metin alternatifi (HTML desteklemeyen e-posta istemcileri için)
-    text: 
-    `Yeni bir randevu talebi alındı:
+    text:
+      `Yeni bir randevu talebi alındı:
     
 Ad Soyad: ${formData.adSoyad}
 Telefon: ${formData.telefon}
@@ -284,20 +285,20 @@ app.post('/api/randevu', apiLimiter, async (req, res) => {
   try {
     // reCAPTCHA v3 doğrulama
     const captchaToken = req.body.captcha;
-    
+
     if (!captchaToken) {
-      return res.status(400).json({ 
-        success: false, 
+      return res.status(400).json({
+        success: false,
         message: 'reCAPTCHA doğrulaması gereklidir.'
       });
     }
-    
+
     const recaptchaResult = await verifyRecaptchaV3(captchaToken);
-    
+
     if (!recaptchaResult.success) {
-      return res.status(400).json({ 
-        success: false, 
-        message: 'Güvenlik doğrulaması başarısız oldu. Lütfen tekrar deneyin.' 
+      return res.status(400).json({
+        success: false,
+        message: 'Güvenlik doğrulaması başarısız oldu. Lütfen tekrar deneyin.'
       });
     }
 
@@ -305,7 +306,7 @@ app.post('/api/randevu', apiLimiter, async (req, res) => {
     if (recaptchaResult.action && recaptchaResult.action !== 'randevu_form') {
       console.warn(`Beklenen eylem 'randevu_form', alınan: ${recaptchaResult.action}`);
     }
-    
+
     const formData = {
       adSoyad: req.body.adSoyad,
       telefon: req.body.telefon,
@@ -316,13 +317,13 @@ app.post('/api/randevu', apiLimiter, async (req, res) => {
     };
 
     // Form verilerinin kontrolü
-    if (!formData.adSoyad || !formData.telefon || !formData.email || !formData.hizmetSecin || !formData.tarih ) {
+    if (!formData.adSoyad || !formData.telefon || !formData.email || !formData.hizmetSecin || !formData.tarih) {
       return res.status(400).json({ success: false, message: 'Lütfen tüm zorunlu alanları doldurun.' });
     }
 
     // E-posta gönderme
     await sendEmail(formData);
-    
+
     res.status(200).json({ success: true, message: 'Randevu talebiniz başarıyla alındı.' });
   } catch (error) {
     console.error('İşlem hatası:', error);
